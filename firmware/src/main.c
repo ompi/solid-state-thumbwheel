@@ -140,7 +140,9 @@ int main(void) {
     uint32_t i = 0;
     uint32_t slow = 3 * 1000;
     volatile uint32_t d = 0;
-uint32_t cnts[7];
+    uint32_t res[15];
+    uint32_t sum;
+    uint32_t avg;
 
     putSerialString("hi!\r\n");
 
@@ -149,68 +151,47 @@ uint32_t cnts[7];
     GPIOD->MODER = GPIOD->MODER & ~0x3fffffff | 0x155555555;
     GPIOA->MODER = GPIOA->MODER & ~0x3fff | 0x1555;
 
-GPIOA->PUPDR = 0x00000002;
+//GPIOA->PUPDR = 0x00002aaa;
 
     while (1) {
-for (x = 0; x < 15; x++) {
+    for (x = 0; x < 15; x++) {
 //
 // A - row drive
 // D - column drive
 //
 
-// turn LED on
-        GPIOD->ODR |= (1 << x);
-        GPIOA->ODR &= ~0x3f;
-        for (d = 0; d < 40 * slow; d++) {
-        }
 // reverse bias
         GPIOD->ODR &= ~(1 << x);
-        GPIOA->ODR |= 0x3f;
+        GPIOA->ODR |= 0x7f;
         for (d = 0; d < 1 * slow; d++) {
         }
 // discharge
-//        GPIOA->MODER &= ~0x3;   // set anode to input
         GPIOA->MODER &= ~0x3fff;   // set anodes to input
+
         cnt = 0;
-        memset(cnts, 0, sizeof(cnts) * 7);
 
-//// illumination on
-//        GPIOA->ODR &= ~((1 << 1) | (1 << 3) | (1 << 5));
-
-        uint32_t done = 0xff;
-        uint32_t c = 0;
-        uint32_t res[7];
-
-        while(GPIOA->IDR & 0x3f) {
-/*            uint32_t data = GPIOA->IDR & 0x3f;
-            uint32_t chg = data ^ done;
-            if (chg) {
-                done = data;
-                res[c] = cnt;
-                c++;
-                if (data == 0) break;
-            }*/
+        while((GPIOA->IDR & 0x7f) && (cnt < 0x40000)) {
             cnt++;
         }
-//        GPIOA->MODER |= 0x1;   // set anode to output again
+
+        res[x] = cnt;
+
         GPIOA->MODER |= 0x1555;   // set anodes to output again
-
-for (i = 0; i < 7; i++) {
-        putSerialHex(cnts[0]);
-        putSerialString(" ");
-}
-        putSerialString("\r\n");
-}
     }
+        sum = 0;
+        for (x = 0; x < 15; x++) {
+            sum += res[x];
+        }
+        sum *= 0.25;
+        avg = (avg * 5 + sum) / 6;
 
-    while (1) {
-/*        for (x = 0; x < 15; x++) {
+        for (x = 0; x < 15; x++) {
             uint8_t digits[3];
             uint8_t j;
 
-            digits[0] = cnt / 100 % 10;
-            digits[1] = cnt / 10 % 10;
-            digits[2] = cnt % 10;
+            digits[0] = avg / 100 % 10;
+            digits[1] = avg / 10 % 10;
+            digits[2] = avg % 10;
 
             uint8_t cd = x / 5;
             uint8_t cc = x % 5;
@@ -223,63 +204,11 @@ for (i = 0; i < 7; i++) {
             }
             data >>= 1;
 
-            GPIO_Write(GPIOD, (1 << x));
+            GPIOD->ODR |= (1 << x);
             GPIO_Write(GPIOA, ~data);
-            for (d = 0; d < 100 * slow; d++) {
+            for (d = 0; d < 5 * slow; d++) {
             }
-        }*/
-
-        wut = !wut;
-        for (run = 0; run < 2; run++) {
-            uint8_t pattern = run ? 0xaa : 0x55;
-            for (x = 0; x < 15; x++) {
-//                                          0  1  2  3  4
-                uint8_t luminationLut[] = { 1, 0, 3, 4, 3,
-                                            1, 2, 1, 2, 3, };
-
-                uint8_t currentDigit = x / 5;
-                uint8_t currentColumn = x % 5;
-
-                uint8_t luminated = luminationLut[currentColumn + 5 * (run ^ wut)];
-
-                GPIO_Write(GPIOD, (1 << (luminated + currentDigit * 5)));
-                GPIO_Write(GPIOA, pattern);
-                GPIOD->PUPDR = 0x00000000;
-                GPIOD->MODER = GPIOD->MODER & ~0x3fffffff | 0x05;
-// charge thingy
-                for (d = 0; d < 5 * slow; d++) {
-                }
-// switch to input
-                uint8_t g;
-                uint16_t p2 = 0;
-                for (g = 0; g < 7; g++) {
-                    p2 |= !(pattern & (1 << g)) ? 0x1 << (g * 2) : 0x0; 
-                }
-                GPIOA->MODER = GPIOA->MODER & ~0x3fff | p2;
-                GPIOA->PUPDR = 0x0000;
-// wait for shit
-                while(1) {
-                    putSerialString("pttrn=");
-                    putSerialHex(pattern);
-                    putSerialString("\r\n");
-                    putSerialString("moder=");
-                    putSerialHex(GPIOA->MODER);
-                    putSerialString("\r\n");
-                    uint8_t in = GPIO_ReadInputData(GPIOA) & 0x007f;
-                    putSerialString("iiiin=");
-                    putSerialHex(in);
-                    putSerialString("\r\n");
-                    uint8_t sht = GPIO_ReadInputData(GPIOA) & 0x007f & pattern;
-                    putSerialString("shtin=");
-                    putSerialHex(sht);
-                    putSerialString("\r\n");
-                    if (sht == 0) {
-                        break;
-                    }
-                }
-// back to output
-                GPIOA->MODER |= 0x1555;
-            }
+            GPIOD->ODR &= ~(1 << x);
         }
 
         if (i % 100 == 0) {
