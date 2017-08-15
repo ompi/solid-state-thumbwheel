@@ -138,12 +138,70 @@ int main(void) {
     uint32_t y;
     uint32_t cnt = 0;
     uint32_t i = 0;
-    uint32_t slow = 3 * 1000;//00;
+    uint32_t slow = 3 * 1000;
     volatile uint32_t d = 0;
+uint32_t cnts[7];
 
     putSerialString("hi!\r\n");
 
     uint8_t wut = 0;
+
+    GPIOD->MODER = GPIOD->MODER & ~0x3fffffff | 0x155555555;
+    GPIOA->MODER = GPIOA->MODER & ~0x3fff | 0x1555;
+
+GPIOA->PUPDR = 0x00000002;
+
+    while (1) {
+for (x = 0; x < 15; x++) {
+//
+// A - row drive
+// D - column drive
+//
+
+// turn LED on
+        GPIOD->ODR |= (1 << x);
+        GPIOA->ODR &= ~0x3f;
+        for (d = 0; d < 40 * slow; d++) {
+        }
+// reverse bias
+        GPIOD->ODR &= ~(1 << x);
+        GPIOA->ODR |= 0x3f;
+        for (d = 0; d < 1 * slow; d++) {
+        }
+// discharge
+//        GPIOA->MODER &= ~0x3;   // set anode to input
+        GPIOA->MODER &= ~0x3fff;   // set anodes to input
+        cnt = 0;
+        memset(cnts, 0, sizeof(cnts) * 7);
+
+//// illumination on
+//        GPIOA->ODR &= ~((1 << 1) | (1 << 3) | (1 << 5));
+
+        uint32_t done = 0xff;
+        uint32_t c = 0;
+        uint32_t res[7];
+
+        while(GPIOA->IDR & 0x3f) {
+/*            uint32_t data = GPIOA->IDR & 0x3f;
+            uint32_t chg = data ^ done;
+            if (chg) {
+                done = data;
+                res[c] = cnt;
+                c++;
+                if (data == 0) break;
+            }*/
+            cnt++;
+        }
+//        GPIOA->MODER |= 0x1;   // set anode to output again
+        GPIOA->MODER |= 0x1555;   // set anodes to output again
+
+for (i = 0; i < 7; i++) {
+        putSerialHex(cnts[0]);
+        putSerialString(" ");
+}
+        putSerialString("\r\n");
+}
+    }
 
     while (1) {
 /*        for (x = 0; x < 15; x++) {
@@ -186,7 +244,9 @@ int main(void) {
 
                 GPIO_Write(GPIOD, (1 << (luminated + currentDigit * 5)));
                 GPIO_Write(GPIOA, pattern);
-/*// charge thingy
+                GPIOD->PUPDR = 0x00000000;
+                GPIOD->MODER = GPIOD->MODER & ~0x3fffffff | 0x05;
+// charge thingy
                 for (d = 0; d < 5 * slow; d++) {
                 }
 // switch to input
@@ -218,7 +278,7 @@ int main(void) {
                     }
                 }
 // back to output
-                GPIOA->MODER |= 0x1555;*/
+                GPIOA->MODER |= 0x1555;
             }
         }
 
